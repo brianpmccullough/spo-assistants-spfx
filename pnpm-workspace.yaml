@@ -1,0 +1,8 @@
+# SPFx's build rig resolves many packages by flat path, so pnpm must expose every
+# dependency at the root of node_modules rather than nesting them. This matches how
+# the existing node_modules tree was created.
+publicHoistPattern:
+  - "*"
+
+allowBuilds:
+  unrs-resolver: true

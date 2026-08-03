@@ -1,0 +1,56 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/spfx-build/package-solution.schema.json",
+  "solution": {
+    "name": "spo-assistants-spfx-client-side-solution",
+    "id": "b6ffb0a6-57ee-4041-9ee7-37e858083564",
+    "version": "1.0.0.0",
+    "includeClientSideAssets": true,
+    "skipFeatureDeployment": true,
+    "isDomainIsolated": false,
+    // "resource" must match the display name of the site assistant API's Entra ID app
+    // registration, and "scope" one of the scopes it exposes. A tenant admin approves
+    // this request under SharePoint admin center > Advanced > API access before
+    // AadHttpClientFactory can issue tokens for the API.
+    "webApiPermissionRequests": [
+      {
+        "resource": "spo-assistants",
+        "scope": "user_impersonation"
+      }
+    ],
+    "developer": {
+      "name": "",
+      "websiteUrl": "",
+      "privacyUrl": "",
+      "termsOfUseUrl": "",
+      "mpnId": "Undefined-1.23.2"
+    },
+    "metadata": {
+      "shortDescription": {
+        "default": "spo-assistants-spfx description"
+      },
+      "longDescription": {
+        "default": "spo-assistants-spfx description"
+      },
+      "screenshotPaths": [],
+      "videoUrl": "",
+      "categories": []
+    },
+    "features": [
+      {
+        "title": "Application Extension - Deployment of custom action",
+        "description": "Deploys a custom action with ClientSideComponentId association",
+        "id": "131f9883-ad19-4b3b-a1e3-d0adc02b3536",
+        "version": "1.0.0.0",
+        "assets": {
+          "elementManifests": [
+            "elements.xml",
+            "ClientSideInstance.xml"
+          ]
+        }
+      }
+    ]
+  },
+  "paths": {
+    "zippedPackage": "solution/spo-assistants-spfx.sppkg"
+  }
+}

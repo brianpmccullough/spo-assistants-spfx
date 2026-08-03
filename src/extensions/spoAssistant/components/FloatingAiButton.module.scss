@@ -1,0 +1,79 @@
+.root {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  // High enough to clear SharePoint's command bar and flyouts, well below the UA maximum.
+  z-index: 2147483000;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+}
+
+.trigger {
+  position: relative;
+  width: 50px;
+  height: 50px;
+  padding: 0;
+  border: 0;
+  border-radius: 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+  background: linear-gradient(
+    135deg,
+    var(--spoAssistantFrom),
+    var(--spoAssistantVia) 60%,
+    var(--spoAssistantTo)
+  );
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.22);
+  // Deliberately no idle animation: present, not attention-seeking.
+  transition: filter 120ms ease-out;
+
+  &:hover {
+    filter: brightness(1.08);
+  }
+
+  &:focus-visible {
+    outline: 2px solid #ffffff;
+    outline-offset: 2px;
+    box-shadow:
+      0 0 0 4px var(--spoAssistantVia),
+      0 2px 10px rgba(0, 0, 0, 0.22);
+  }
+}
+
+.triggerIcon {
+  display: block;
+}
+
+.tooltip {
+  position: absolute;
+  bottom: 60px;
+  right: 0;
+  padding: 5px 10px;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #323130;
+  font-size: 12px;
+  line-height: 16px;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.16);
+  transition: opacity 120ms ease-out;
+}
+
+.trigger:hover ~ .tooltip,
+.trigger:focus-visible ~ .tooltip {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .trigger,
+  .tooltip {
+    transition: none;
+  }
+}

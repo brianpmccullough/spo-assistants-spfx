@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Elements xmlns="http://schemas.microsoft.com/sharepoint/">
+    <CustomAction
+        Title="SpoAssistant"
+        Location="ClientSideExtension.ApplicationCustomizer"
+        ClientSideComponentId="3a9780b3-e32e-48dc-84b0-a7882340b7e2"
+        ClientSideComponentProperties="{&quot;apiBaseUrl&quot;:&quot;https://REPLACE-WITH-API-HOST&quot;,&quot;apiResourceUri&quot;:&quot;api://291519cc-fc6f-4cc6-8045-7db0d00a6ecb&quot;}">
+    </CustomAction>
+</Elements>

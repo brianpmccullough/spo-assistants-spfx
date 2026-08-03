@@ -1,0 +1,137 @@
+.card {
+  width: 260px;
+  margin-bottom: 10px;
+  padding: 6px 0 8px;
+  border-radius: 10px;
+  background: #ffffff;
+  color: #323130;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.18);
+  transform-origin: bottom right;
+  animation: cardIn 120ms ease-out;
+}
+
+@keyframes cardIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.banner {
+  padding: 8px 14px;
+  font-size: 12px;
+  line-height: 16px;
+  color: #605e5c;
+}
+
+.bannerError {
+  color: #a4262c;
+}
+
+.menu {
+  display: flex;
+  flex-direction: column;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 11px 14px;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  font-family: inherit;
+  color: inherit;
+
+  &:hover {
+    background: #f3f2f1;
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--spoAssistantAccent);
+    outline-offset: -2px;
+  }
+}
+
+.rowIcon {
+  flex: 0 0 auto;
+  color: var(--spoAssistantAccent);
+}
+
+.rowLabel {
+  font-size: 13px;
+  line-height: 18px;
+}
+
+.divider {
+  margin: 6px 14px;
+  border: 0;
+  border-top: 1px solid #edebe9;
+}
+
+.askRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  margin: 6px 14px 0;
+  padding: 0 4px 0 12px;
+  border: 1px solid #d2d0ce;
+  border-radius: 18px;
+
+  &:focus-within {
+    border-color: var(--spoAssistantAccent);
+  }
+}
+
+.askInput {
+  flex: 1 1 auto;
+  min-width: 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  font-family: inherit;
+  font-size: 13px;
+  color: inherit;
+
+  &::placeholder {
+    color: #a19f9d;
+  }
+}
+
+.askSend {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  cursor: pointer;
+  background: transparent;
+  color: var(--spoAssistantAccent);
+
+  &:hover:not(:disabled) {
+    background: #f3f2f1;
+  }
+
+  &:disabled {
+    color: #c8c6c4;
+    cursor: default;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card {
+    animation: none;
+  }
+}
