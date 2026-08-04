@@ -16,6 +16,67 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
 
+      - name: Ensure versions
+        id: version
+        shell: pwsh
+        run: |
+          $pkgPath = 'package.json'
+          $solutionPath = 'config/package-solution.json'
+
+          $pkgVersion = (Get-Content $pkgPath | ConvertFrom-Json).version
+          $solutionVersion = (Get-Content $solutionPath | ConvertFrom-Json).solution.version
+
+          $pkgCore = ($pkgVersion -split '\.')[0..2] -join '.'
+          $solutionCore = ($solutionVersion -split '\.')[0..2] -join '.'
+
+          if ($pkgCore -ne $solutionCore) {
+            Write-Error "Version mismatch: package.json is $pkgVersion (first three: $pkgCore) but config/package-solution.json is $solutionVersion (first three: $solutionCore). Keep the first three segments in sync; the solution version's 4th segment is free to move independently."
+            exit 1
+          }
+
+          # Only push builds cut a release, so only push builds need a unique, unclaimed tag.
+          if ($env:GITHUB_EVENT_NAME -eq 'push') {
+            $parts = $pkgCore -split '\.'
+            $major = [int]$parts[0]; $minor = [int]$parts[1]; $patch = [int]$parts[2]
+
+            while ($true) {
+              $tag = "v$major.$minor.$patch"
+              $refs = @(git ls-remote --tags origin "refs/tags/$tag")
+              if ($refs.Count -eq 0) { break }
+              Write-Host "Tag $tag already exists, bumping patch."
+              $patch++
+            }
+
+            $newPkgCore = "$major.$minor.$patch"
+
+            if ($newPkgCore -ne $pkgCore) {
+              $pkgCore = $newPkgCore
+              $solutionVersion = "$pkgCore.0"
+
+              $pkgContent = Get-Content $pkgPath -Raw
+              $pkgRegex = [regex]'("version":\s*")\d+\.\d+\.\d+(")'
+              Set-Content -Path $pkgPath -NoNewline -Value $pkgRegex.Replace($pkgContent, "`${1}$pkgCore`${2}", 1)
+
+              $solutionContent = Get-Content $solutionPath -Raw
+              $solutionRegex = [regex]'("version":\s*")\d+\.\d+\.\d+\.\d+(")'
+              Set-Content -Path $solutionPath -NoNewline -Value $solutionRegex.Replace($solutionContent, "`${1}$solutionVersion`${2}", 1)
+
+              git config user.name 'github-actions[bot]'
+              git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+              git add $pkgPath $solutionPath
+              git commit -m "chore: bump version to $pkgCore [skip ci]"
+              git push origin "HEAD:${{ github.ref_name }}"
+
+              Write-Host "Bumped to $pkgCore and pushed."
+            }
+          }
+
+          $sha = git rev-parse --short HEAD
+          Write-Host "Using solution version $solutionVersion (tag v$pkgCore, sha $sha)"
+          "version=$solutionVersion" >> $env:GITHUB_OUTPUT
+          "tag=v$pkgCore" >> $env:GITHUB_OUTPUT
+          "sha=$sha" >> $env:GITHUB_OUTPUT
+
       - name: Set up pnpm
         uses: pnpm/action-setup@v5
         with:
@@ -29,24 +90,6 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
-
-      - name: Check package.json / package-solution.json versions match
-        id: solution
-        shell: pwsh
-        run: |
-          $pkgVersion = (Get-Content package.json | ConvertFrom-Json).version
-          $solutionVersion = (Get-Content config/package-solution.json | ConvertFrom-Json).solution.version
-
-          $pkgCore = ($pkgVersion -split '\.')[0..2] -join '.'
-          $solutionCore = ($solutionVersion -split '\.')[0..2] -join '.'
-
-          if ($pkgCore -ne $solutionCore) {
-            Write-Error "Version mismatch: package.json is $pkgVersion (first three: $pkgCore) but config/package-solution.json is $solutionVersion (first three: $solutionCore). Keep the first three segments in sync; the solution version's 4th segment is free to move independently."
-            exit 1
-          }
-
-          Write-Host "Versions in sync: package.json=$pkgVersion, package-solution.json=$solutionVersion"
-          "version=$solutionVersion" >> $env:GITHUB_OUTPUT
 
       - name: Build and package solution
         run: pnpm run build
@@ -63,8 +106,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          tag="build-${{ steps.solution.outputs.version }}-$(git rev-parse --short HEAD)"
-          gh release create "$tag" sharepoint/solution/*.sppkg \
-            --title "$tag" \
-            --notes "Automated build from ${{ github.sha }}." \
+          gh release create "${{ steps.version.outputs.tag }}" sharepoint/solution/*.sppkg \
+            --title "${{ steps.version.outputs.tag }}" \
+            --notes "Solution version ${{ steps.version.outputs.version }}, built from ${{ steps.version.outputs.sha }}." \
             --prerelease
