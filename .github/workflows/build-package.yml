@@ -1,0 +1,70 @@
+name: Build and package
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Check package.json / package-solution.json versions match
+        id: solution
+        shell: pwsh
+        run: |
+          $pkgVersion = (Get-Content package.json | ConvertFrom-Json).version
+          $solutionVersion = (Get-Content config/package-solution.json | ConvertFrom-Json).solution.version
+
+          $pkgCore = ($pkgVersion -split '\.')[0..2] -join '.'
+          $solutionCore = ($solutionVersion -split '\.')[0..2] -join '.'
+
+          if ($pkgCore -ne $solutionCore) {
+            Write-Error "Version mismatch: package.json is $pkgVersion (first three: $pkgCore) but config/package-solution.json is $solutionVersion (first three: $solutionCore). Keep the first three segments in sync; the solution version's 4th segment is free to move independently."
+            exit 1
+          }
+
+          Write-Host "Versions in sync: package.json=$pkgVersion, package-solution.json=$solutionVersion"
+          "version=$solutionVersion" >> $env:GITHUB_OUTPUT
+
+      - name: Build and package solution
+        run: pnpm run build
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: spo-assistants-spfx.sppkg
+          path: sharepoint/solution/*.sppkg
+          if-no-files-found: error
+
+      - name: Publish release with .sppkg asset
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          tag="build-${{ steps.solution.outputs.version }}-$(git rev-parse --short HEAD)"
+          gh release create "$tag" sharepoint/solution/*.sppkg \
+            --title "$tag" \
+            --notes "Automated build from ${{ github.sha }}." \
+            --prerelease

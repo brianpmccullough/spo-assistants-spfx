@@ -3,7 +3,7 @@
   "solution": {
     "name": "spo-assistants-spfx-client-side-solution",
     "id": "b6ffb0a6-57ee-4041-9ee7-37e858083564",
-    "version": "1.0.0.0",
+    "version": "0.1.0.0",
     "includeClientSideAssets": true,
     "skipFeatureDeployment": true,
     "isDomainIsolated": false,
