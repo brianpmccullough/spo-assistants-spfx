@@ -57,6 +57,19 @@ changed per tenant or per site without a redeploy.
 If `apiBaseUrl` or `apiResourceUri` is missing, the button still renders and the menu shows
 a configuration message instead of throwing on every page in the tenant.
 
+### Serve configurations
+
+`config/serve.json` defines which API the local workbench/debug session talks to:
+
+| Configuration           | `apiBaseUrl`                                                                         | Command                 |
+| ----------------------- | ------------------------------------------------------------------------------------ | ----------------------- |
+| `default` / `spoAssistant` | `http://localhost:3000` — API running locally                                       | `pnpm start`            |
+| `spoAssistantContainer` | `https://container-app-spo-assistants.agreeablesand-e9283835.swedencentral.azurecontainerapps.io` — deployed Azure Container App | `pnpm start:container`  |
+
+`pnpm start:container` is just `heft start --clean --serve-config spoAssistantContainer`.
+The container app's CORS must allow the debug origin (`https://<tenant>.sharepoint.com`)
+the same way the local API does.
+
 Placeholders to replace before deploying:
 
 - `sharepoint/assets/elements.xml` — `REPLACE-WITH-API-HOST`, the origin the deployed API
