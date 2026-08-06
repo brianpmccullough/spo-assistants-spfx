@@ -21,7 +21,7 @@ on:
         default: artifact
         type: string
       release_tag:
-        description: "Release tag to pull the .sppkg from when package_source is 'release'. Empty means latest."
+        description: "Release tag to pull the .sppkg from when package_source is 'release'. Empty means the newest release. Unused by Remove and Status."
         required: false
         default: ''
         type: string
@@ -65,21 +65,36 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
 
+      # Only Deploy uploads a package; Remove and Status work from what is already on the
+      # site, so they never need one.
       - name: Download .sppkg from this run
-        if: inputs.package_source == 'artifact'
+        if: inputs.action == 'Deploy' && inputs.package_source == 'artifact'
         uses: actions/download-artifact@v6
         with:
           name: spo-assistants-spfx.sppkg
           path: sharepoint/solution
 
       - name: Download .sppkg from a release
-        if: inputs.package_source == 'release'
+        if: inputs.action == 'Deploy' && inputs.package_source == 'release'
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ inputs.release_tag }}
         run: |
           mkdir -p sharepoint/solution
-          gh release download $TAG --pattern '*.sppkg' --dir sharepoint/solution --clobber
+
+          if [ -z "$TAG" ]; then
+            # Releases are cut as prereleases, so "latest" resolves to nothing — take the
+            # newest release of any kind instead.
+            TAG=$(gh release list --limit 1 --json tagName --jq '.[0].tagName')
+            if [ -z "$TAG" ]; then echo "::error::No releases found to deploy from."; exit 1; fi
+            echo "No tag supplied; using the newest release $TAG."
+          elif ! gh release view "$TAG" >/dev/null 2>&1; then
+            # Tags are vX.Y.Z; accept a bare version too.
+            echo "Release $TAG not found, trying v$TAG."
+            TAG="v$TAG"
+          fi
+
+          gh release download "$TAG" --pattern '*.sppkg' --dir sharepoint/solution --clobber
 
       - name: Cache PnP.PowerShell
         uses: actions/cache@v4

@@ -17,7 +17,7 @@ on:
         type: choice
         options: [Deploy, Remove, Status]
       release_tag:
-        description: 'Release tag to deploy. Leave empty for the latest release.'
+        description: 'Deploy only: release tag (v0.1.4, or bare 0.1.4). Empty = newest release.'
         required: false
         type: string
       api_base_url:
