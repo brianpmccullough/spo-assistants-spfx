@@ -124,13 +124,25 @@ how you ship a new build or change the API host:
 1. creates the **site collection app catalog** if the site has none (via the admin center,
    derived from the site URL unless `-TenantAdminUrl` is given);
 2. `Add-PnPApp -Scope Site -Overwrite -Publish` uploads the `.sppkg` there;
-3. `Install-PnPApp` on first run, `Update-PnPApp` when a newer version is in the catalog;
+3. `Install-PnPApp`, falling back to `Update-PnPApp` when SharePoint says the app is
+   already installed;
 4. `Add-PnPCustomAction` with the `ClientSideComponentProperties` for that site — rewritten
    only when the properties actually changed.
 
 `Remove` reverses it: custom action, `Uninstall-PnPApp`, `Remove-PnPApp`, and the app
 catalog itself only with `-RemoveAppCatalog`. A failing site does not stop the batch; the
 script exits non-zero and names the sites that failed.
+
+Three SharePoint behaviours the script works around — worth knowing before "fixing" the
+logic that looks redundant:
+
+- **`InstalledVersion` is cleared by every overwrite-publish** while the app stays
+  installed, and repopulates later. It cannot be used to decide whether to install, so the
+  script attempts the operation and reacts to the error instead.
+- **`Installed` comes back empty rather than `$false`**, so it is never used.
+- **Removing a site collection app catalog leaves the `AppCatalog` list behind** with the
+  endpoint deactivated. Catalog detection probes the endpoint (`Get-PnPApp -Scope Site`),
+  not the list.
 
 For unattended use, swap `-Interactive` for an Entra app-only certificate:
 
@@ -167,9 +179,20 @@ the only supported unattended path):
 | `SPO_CERTIFICATE_BASE64`   | `base64 -i pnp.pfx` of that registration's cert. |
 | `SPO_CERTIFICATE_PASSWORD` | Optional, if the PFX is password-protected.      |
 
-The registration needs the application permissions `SharePoint > Sites.FullControl.All`
-(custom action + app install) and `SharePoint > Sites.Manage.All`-or-tenant-admin rights to
-create site collection app catalogs, granted with tenant admin consent.
+The registration needs one application permission, `SharePoint > Sites.FullControl.All`
+(the **SharePoint** API, `00000003-0000-0ff1-ce00-…`, not the identically-named Graph
+permission), granted with tenant admin consent. That covers creating site collection app
+catalogs, installing the app, and writing the custom action.
+
+Two notes on the manual workflow: `release_tag` is used only by `Deploy` — `Remove` and
+`Status` need no package — and it accepts either `v0.1.4` or a bare `0.1.4`. Left empty it
+resolves to the newest release, which matters because releases are cut as **prereleases**
+and so never match GitHub's "latest".
+
+Because the solution deploys to *site collection* app catalogs, its
+`webApiPermissionRequests` never appear in the admin center's API access page — that flow
+is tenant-app-catalog only. Grant the scope with `./set.ps1` instead; the deployed
+component cannot get tokens until you do.
 
 ### API contract
 
