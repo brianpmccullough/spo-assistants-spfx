@@ -145,6 +145,31 @@ function Write-Ok { param([string]$Message) Write-Host "  $Message" -ForegroundC
 function Write-Skip { param([string]$Message) Write-Host "  $Message" -ForegroundColor DarkGray }
 function Write-Warn { param([string]$Message) Write-Host "  $Message" -ForegroundColor Yellow }
 
+function Get-ErrorText {
+    <#
+        CSOM and MSAL failures often carry an empty or opaque Message ("{}") with the real
+        cause an inner exception or two down, so walk the chain and keep the type names.
+    #>
+    param([Parameter(Mandatory = $true)]$ErrorRecord)
+
+    $parts = @()
+    $exception = $ErrorRecord.Exception
+    while ($exception) {
+        $message = $exception.Message
+        if (-not [string]::IsNullOrWhiteSpace($message) -and $message -ne "{}") {
+            $parts += "$($exception.GetType().Name): $message"
+        }
+        $exception = $exception.InnerException
+    }
+
+    if ($parts.Count -eq 0) {
+        # Nothing usable in the chain — fall back to how PowerShell would have printed it.
+        $parts += ($ErrorRecord | Out-String).Trim()
+    }
+
+    return $parts -join " -> "
+}
+
 function Add-SupportedParameter {
     <#
         Adds parameters to a splat only if the installed cmdlet actually accepts them, so
@@ -546,7 +571,15 @@ foreach ($url in $SiteUrl) {
     }
     catch {
         # Keep going: one bad site should not strand the rest of the batch.
-        Write-Host "  Failed: $($_.Exception.Message)" -ForegroundColor Red
+        $errorText = Get-ErrorText -ErrorRecord $_
+
+        # A site in another tenant (or a typo) authenticates fine and then 401s on the
+        # first real call, which reads as a permissions problem when it is a URL problem.
+        if ($errorText -match "\(401\)|\(404\)|Unauthorized|Not Found") {
+            $errorText += " — check that $url exists and belongs to the tenant you authenticated against."
+        }
+
+        Write-Host "  Failed: $errorText" -ForegroundColor Red
         $failed += $url
     }
 }
