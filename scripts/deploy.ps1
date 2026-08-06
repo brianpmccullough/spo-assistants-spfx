@@ -136,9 +136,13 @@ $CustomActionName = "SpoAssistant"
 $CustomActionLocation = "ClientSideExtension.ApplicationCustomizer"
 $PackageName = "spo-assistants-spfx.sppkg"
 
-# The app catalog list is provisioned asynchronously; this is how long we wait for it.
+# App catalogs are provisioned asynchronously; this is how long we wait for one.
 $AppCatalogTimeoutSeconds = 120
 $AppCatalogPollSeconds = 5
+
+# How SharePoint reports "this site has no app catalog endpoint", whether it never had one
+# or the endpoint is not live yet.
+$AppCatalogMissingPattern = "sitecollectionappcatalog|ResourceNotFound|Cannot find resource"
 
 function Write-Step { param([string]$Message) Write-Host "  $Message" -ForegroundColor Cyan }
 function Write-Ok { param([string]$Message) Write-Host "  $Message" -ForegroundColor Green }
@@ -259,13 +263,47 @@ function Resolve-TenantAdminUrl {
     return "https://$($Matches.tenant)-admin.sharepoint.$($Matches.suffix)"
 }
 
+function Invoke-WithRetry {
+    <#
+        Retries an action while it keeps failing for an expected, transient reason —
+        SharePoint provisions app catalogs asynchronously, so the endpoint can 404 for a
+        while after it is created. Any other failure is rethrown immediately.
+    #>
+    param(
+        [Parameter(Mandatory = $true)][scriptblock]$Action,
+        [Parameter(Mandatory = $true)][string]$RetryOn,
+        [int]$TimeoutSeconds = $AppCatalogTimeoutSeconds,
+        [int]$DelaySeconds = $AppCatalogPollSeconds
+    )
+
+    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+    while ($true) {
+        try {
+            return & $Action
+        }
+        catch {
+            if ((Get-ErrorText -ErrorRecord $_) -notmatch $RetryOn -or (Get-Date) -ge $deadline) { throw }
+            Start-Sleep -Seconds $DelaySeconds
+        }
+    }
+}
+
 function Test-SiteCollectionAppCatalog {
+    <#
+        Probe the app catalog endpoint itself rather than the AppCatalog list: removing a
+        site collection app catalog deactivates the endpoint but leaves the list behind, so
+        the list's presence says nothing about whether packages can be published.
+    #>
     param([Parameter(Mandatory = $true)]$Connection)
 
-    # The site collection app catalog is a list at <site>/AppCatalog. Asking for the list
-    # is cheaper than Get-PnPSiteCollectionAppCatalog, which needs tenant admin rights.
-    $list = Get-PnPList -Identity "AppCatalog" -Connection $Connection -ErrorAction SilentlyContinue
-    return $null -ne $list
+    try {
+        Get-PnPApp -Scope Site -Connection $Connection -ErrorAction Stop | Out-Null
+        return $true
+    }
+    catch {
+        if ((Get-ErrorText -ErrorRecord $_) -match $AppCatalogMissingPattern) { return $false }
+        throw
+    }
 }
 
 function New-SiteCollectionAppCatalog {
@@ -457,7 +495,9 @@ function Invoke-Deploy {
         }
 
         Write-Step "Uploading $([IO.Path]::GetFileName($package)) to the site collection app catalog ..."
-        $app = Add-PnPApp -Path $package -Scope Site -Overwrite -Publish -Connection $connection
+        $app = Invoke-WithRetry -RetryOn $AppCatalogMissingPattern -Action {
+            Add-PnPApp -Path $package -Scope Site -Overwrite -Publish -Connection $connection
+        }
         Write-Ok "Published $($app.Title) $($app.AppCatalogVersion)."
 
         # Re-read after publishing: Add-PnPApp's return value predates the install flags.
