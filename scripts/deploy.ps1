@@ -334,6 +334,44 @@ function Test-AppInstalled {
     return $null -ne $App -and -not [string]::IsNullOrWhiteSpace($App.InstalledVersion)
 }
 
+function Install-OrUpgradeApp {
+    <#
+        Publishing with -Overwrite briefly leaves the catalog entry reporting no
+        InstalledVersion even when the app is installed, so the flags decide which call to
+        try first, not whether the app is installed. SharePoint is the authority: if it
+        rejects the install as already present, upgrade instead.
+    #>
+    param(
+        [Parameter(Mandatory = $true)]$Connection,
+        [Parameter(Mandatory = $true)]$App
+    )
+
+    if (Test-AppInstalled -App $App) {
+        if (-not $App.CanUpgrade -and $App.InstalledVersion -eq $App.AppCatalogVersion) {
+            Write-Skip "App already installed at $($App.InstalledVersion)."
+            return
+        }
+
+        Write-Step "Upgrading the installed app from $($App.InstalledVersion) to $($App.AppCatalogVersion) ..."
+        Update-PnPApp -Identity $App.Id -Scope Site -Connection $Connection | Out-Null
+        Write-Ok "App upgraded."
+        return
+    }
+
+    try {
+        Write-Step "Installing the app on the site ..."
+        Install-PnPApp -Identity $App.Id -Scope Site -Connection $Connection | Out-Null
+        Write-Ok "App installed."
+    }
+    catch {
+        if ((Get-ErrorText -ErrorRecord $_) -notmatch "already exists") { throw }
+
+        Write-Skip "App was already installed; upgrading to $($App.AppCatalogVersion) instead."
+        Update-PnPApp -Identity $App.Id -Scope Site -Connection $Connection | Out-Null
+        Write-Ok "App upgraded."
+    }
+}
+
 function Resolve-PackagePath {
     if ($PackagePath) {
         if (-not (Test-Path $PackagePath)) { throw "Package file not found: $PackagePath" }
@@ -428,19 +466,7 @@ function Invoke-Deploy {
             throw "The package is not in $Url's app catalog after publishing."
         }
 
-        if (-not (Test-AppInstalled -App $catalogApp)) {
-            Write-Step "Installing the app on the site ..."
-            Install-PnPApp -Identity $catalogApp.Id -Scope Site -Connection $connection | Out-Null
-            Write-Ok "App installed."
-        }
-        elseif ($catalogApp.CanUpgrade -or $catalogApp.InstalledVersion -ne $catalogApp.AppCatalogVersion) {
-            Write-Step "Upgrading the installed app from $($catalogApp.InstalledVersion) to $($catalogApp.AppCatalogVersion) ..."
-            Update-PnPApp -Identity $catalogApp.Id -Scope Site -Connection $connection | Out-Null
-            Write-Ok "App upgraded."
-        }
-        else {
-            Write-Skip "App already installed at $($catalogApp.InstalledVersion)."
-        }
+        Install-OrUpgradeApp -Connection $connection -App $catalogApp
 
         Set-Customizer -Connection $connection -DesiredProperties (Get-DesiredProperties)
     }
