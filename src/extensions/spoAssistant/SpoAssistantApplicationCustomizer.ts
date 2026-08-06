@@ -29,10 +29,8 @@ const LOG_SOURCE: string = 'SpoAssistantApplicationCustomizer';
  * crash on every page in the tenant.
  */
 export interface ISpoAssistantApplicationCustomizerProperties {
-  /** Origin of the site assistant API, e.g. `https://localhost:3000`. */
   apiBaseUrl?: string;
-  /** The API's Entra ID Application ID URI or client ID. */
-  apiResourceUri?: string;
+  apiResourceUri?: string; // The API's Entra ID Application ID URI or client ID.
   actions?: IAssistantAction[];
   theme?: Partial<IAssistantTheme>;
 }
