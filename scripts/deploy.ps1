@@ -498,13 +498,20 @@ function Invoke-Remove {
         }
 
         $catalogApp = Get-SolutionApp -Connection $connection
-        if (Test-AppInstalled -App $catalogApp) {
-            Write-Step "Uninstalling the app from the site ..."
-            Uninstall-PnPApp -Identity $catalogApp.Id -Scope Site -Connection $connection | Out-Null
-            Write-Ok "App uninstalled."
-        }
-        else {
-            Write-Skip "App is not installed on this site."
+        if ($catalogApp) {
+            # InstalledVersion is cleared by an overwrite-publish, so it cannot rule the
+            # install out. Ask SharePoint to uninstall and treat "there is nothing there"
+            # as success.
+            try {
+                Write-Step "Uninstalling the app from the site ..."
+                Uninstall-PnPApp -Identity $catalogApp.Id -Scope Site -Connection $connection | Out-Null
+                Write-Ok "App uninstalled."
+            }
+            catch {
+                $uninstallError = Get-ErrorText -ErrorRecord $_
+                if ($uninstallError -notmatch "not installed|does not exist|Cannot find|not found") { throw }
+                Write-Skip "App is not installed on this site."
+            }
         }
 
         if ($catalogApp) {
@@ -541,8 +548,16 @@ function Invoke-Status {
 
             $catalogApp = Get-SolutionApp -Connection $connection
             if ($catalogApp) {
-                $installedVersion = if (Test-AppInstalled -App $catalogApp) { $catalogApp.InstalledVersion } else { "not installed" }
-                Write-Host "  Package: $($catalogApp.Title) catalog=$($catalogApp.AppCatalogVersion) installed=$installedVersion canUpgrade=$($catalogApp.CanUpgrade)" -ForegroundColor Gray
+                Write-Host "  Package: $($catalogApp.Title) catalog=$($catalogApp.AppCatalogVersion) canUpgrade=$($catalogApp.CanUpgrade)" -ForegroundColor Gray
+
+                if (Test-AppInstalled -App $catalogApp) {
+                    Write-Host "  Installed version: $($catalogApp.InstalledVersion)" -ForegroundColor Gray
+                }
+                else {
+                    # Reporting this as "not installed" would be a guess: SharePoint clears
+                    # the field on every overwrite-publish, installed or not.
+                    Write-Host "  Installed version: not reported (cleared by the last publish; not proof the app is absent)" -ForegroundColor Gray
+                }
             }
             else {
                 Write-Warn "Package: not in this site's app catalog"
