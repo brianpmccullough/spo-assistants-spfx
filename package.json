@@ -13,11 +13,13 @@
     "start:container": "heft start --clean --serve-config spoAssistantContainer"
   },
   "dependencies": {
+    "@fluentui/react": "^8.106.4",
     "@microsoft/decorators": "1.23.2",
     "@microsoft/sp-application-base": "1.23.2",
     "@microsoft/sp-core-library": "1.23.2",
     "@microsoft/sp-dialog": "1.23.2",
     "@microsoft/sp-http": "1.23.2",
+    "@microsoft/sp-office-ui-fabric-core": "1.23.2",
     "react": "17.0.1",
     "react-dom": "17.0.1",
     "tslib": "2.3.1"

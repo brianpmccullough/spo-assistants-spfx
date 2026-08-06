@@ -7,6 +7,7 @@ import {
   PlaceholderName
 } from '@microsoft/sp-application-base';
 import { Log } from '@microsoft/sp-core-library';
+import { initializeIcons } from '@fluentui/react/lib/Icons';
 
 import * as strings from 'SpoAssistantApplicationCustomizerStrings';
 
@@ -32,8 +33,6 @@ export interface ISpoAssistantApplicationCustomizerProperties {
   apiBaseUrl?: string;
   /** The API's Entra ID Application ID URI or client ID. */
   apiResourceUri?: string;
-  /** Optional deep link for the "Open chat" action. */
-  chatUrl?: string;
   actions?: IAssistantAction[];
   theme?: Partial<IAssistantTheme>;
 }
@@ -51,6 +50,10 @@ export default class SpoAssistantApplicationCustomizer extends BaseApplicationCu
 
   public onInit(): Promise<void> {
     Log.info(LOG_SOURCE, `Initialized ${strings.Title}`);
+
+    // Registers the Fluent icon font once per page load. Required before any Fluent
+    // icon-based control (IconButton, Spinner, etc.) renders, or glyphs show as blanks.
+    initializeIcons();
 
     // Placeholders are not guaranteed to exist yet at onInit, and they are recreated as
     // the user navigates between pages, so render on every change rather than just once.
@@ -99,13 +102,12 @@ export default class SpoAssistantApplicationCustomizer extends BaseApplicationCu
   }
 
   private _buildProps(): IFloatingAiButtonProps {
-    const { apiBaseUrl, apiResourceUri, chatUrl, actions, theme } = this.properties;
+    const { apiBaseUrl, apiResourceUri, actions, theme } = this.properties;
 
     const config: IAssistantConfig = {
       // A trailing slash here would produce `//me` against the API.
       apiBaseUrl: (apiBaseUrl ?? '').replace(/\/+$/, ''),
       apiResourceUri: apiResourceUri ?? '',
-      chatUrl,
       actions: actions && actions.length > 0 ? actions : DEFAULT_ACTIONS,
       theme: { ...DEFAULT_THEME, ...theme }
     };

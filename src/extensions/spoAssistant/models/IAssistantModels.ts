@@ -51,10 +51,16 @@ export interface IAssistantConfig {
    * in the tenant's API access page.
    */
   apiResourceUri: string;
-  /** Optional deep link used by the "Open chat" action until a chat surface exists in-product. */
-  chatUrl?: string;
   actions: IAssistantAction[];
   theme: IAssistantTheme;
+}
+
+/** A single turn in the in-product chat surface. Ephemeral, client-held (ADR-004) — never persisted. */
+export interface IChatMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  text: string;
+  timestamp: string;
 }
 
 export const DEFAULT_THEME: IAssistantTheme = {

@@ -33,9 +33,33 @@ export class AssistantApiClient {
     return this._toCurrentUser(await response.json());
   }
 
+  /**
+   * Sends a message to the site assistant. Today the API only echoes the request back
+   * with a server timestamp (no orchestrator yet) — the response shape is intentionally
+   * loose (`Record<string, unknown>`) so it does not need to change again once real
+   * fields (an actual answer, tool activity, etc.) land per 03-contracts.md.
+   */
+  public async chat(message: string): Promise<Record<string, unknown>> {
+    const response = await this._post('/assistants/site-assistant/chat', { message });
+
+    if (!response.ok) {
+      throw new Error(await this._describeFailure(response));
+    }
+
+    return response.json();
+  }
+
   private async _get(path: string): Promise<HttpClientResponse> {
     const client = await this._getClient();
     return client.get(`${this._baseUrl}${path}`, AadHttpClient.configurations.v1);
+  }
+
+  private async _post(path: string, body: unknown): Promise<HttpClientResponse> {
+    const client = await this._getClient();
+    return client.post(`${this._baseUrl}${path}`, AadHttpClient.configurations.v1, {
+      body: JSON.stringify(body),
+      headers: { 'Content-Type': 'application/json' }
+    });
   }
 
   private async _getClient(): Promise<AadHttpClient> {

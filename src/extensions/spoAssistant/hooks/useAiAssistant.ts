@@ -9,7 +9,6 @@ export interface IUseAiAssistant {
   notice: string | undefined;
   dismissNotice: () => void;
   runAction: (id: AssistantActionId) => void;
-  ask: (question: string) => void;
 }
 
 export interface IUseAiAssistantOptions {
@@ -21,11 +20,10 @@ export interface IUseAiAssistantOptions {
   enabled: boolean;
   /** Reason the client could not be constructed, e.g. missing configuration. */
   configError?: string;
-  chatUrl?: string;
 }
 
 export function useAiAssistant(options: IUseAiAssistantOptions): IUseAiAssistant {
-  const { client, enabled, configError, chatUrl } = options;
+  const { client, enabled, configError } = options;
 
   const [connection, setConnection] = useState<IConnectionState>({ status: 'idle' });
   const [notice, setNotice] = useState<string | undefined>(undefined);
@@ -68,31 +66,11 @@ export function useAiAssistant(options: IUseAiAssistantOptions): IUseAiAssistant
 
   const dismissNotice = useCallback(() => setNotice(undefined), []);
 
-  const runAction = useCallback(
-    (id: AssistantActionId) => {
-      if (id === 'openChat') {
-        if (chatUrl) {
-          window.open(chatUrl, '_blank', 'noopener');
-        } else {
-          setNotice('The chat experience is not configured yet.');
-        }
-        return;
-      }
-
-      // Only `/me` is wired to the API so far. These actions map to the site assistant
-      // API's `POST /sites/{sitePath}/assistant/chat` stream once that is hooked up;
-      // until then say so rather than failing silently.
-      setNotice('This action is not connected to the assistant API yet.');
-    },
-    [chatUrl]
-  );
-
-  const ask = useCallback((question: string) => {
-    if (!question.trim()) {
-      return;
-    }
-    setNotice('Asking questions is not connected to the assistant API yet.');
+  const runAction = useCallback((id: AssistantActionId) => {
+    // `openChat` is intercepted by FloatingAiButton before this ever runs (it opens the
+    // in-product chat surface directly). Only the still-unimplemented actions land here.
+    setNotice('This action is not connected to the assistant API yet.');
   }, []);
 
-  return { connection, notice, dismissNotice, runAction, ask };
+  return { connection, notice, dismissNotice, runAction };
 }
