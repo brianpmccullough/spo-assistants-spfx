@@ -1,9 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<Elements xmlns="http://schemas.microsoft.com/sharepoint/">
-    <ClientSideComponentInstance
-        Title="SpoAssistant"
-        Location="ClientSideExtension.ApplicationCustomizer"
-        ComponentId="3a9780b3-e32e-48dc-84b0-a7882340b7e2"
-        Properties="{&quot;testMessage&quot;:&quot;Test message&quot;}">
-    </ClientSideComponentInstance>
-</Elements>

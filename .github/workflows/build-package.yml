@@ -110,3 +110,17 @@ jobs:
             --title "${{ steps.version.outputs.tag }}" \
             --notes "Solution version ${{ steps.version.outputs.version }}, built from ${{ steps.version.outputs.sha }}." \
             --prerelease
+
+  # Sites listed in the SPO_DEPLOY_SITES repository variable get every push to main.
+  # Anything else — other sites, removals, redeploying an older release — goes through the
+  # manual deploy.yml workflow.
+  deploy:
+    needs: build
+    if: github.event_name == 'push' && vars.SPO_DEPLOY_SITES != ''
+    uses: ./.github/workflows/deploy-reusable.yml
+    with:
+      sites: ${{ vars.SPO_DEPLOY_SITES }}
+      action: Deploy
+      package_source: artifact
+      api_base_url: ${{ vars.SPO_API_BASE_URL }}
+    secrets: inherit

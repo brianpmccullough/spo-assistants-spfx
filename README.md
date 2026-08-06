@@ -46,13 +46,13 @@ silently:
 All settings come from the custom action's `ClientSideComponentProperties`, so they can be
 changed per tenant or per site without a redeploy.
 
-| Property         | Required | Description                                                                          |
-| ---------------- | -------- | ------------------------------------------------------------------------------------ |
-| `apiBaseUrl`     | Yes      | Origin of the site assistant API, e.g. `https://localhost:3000`. No trailing slash.   |
-| `apiResourceUri` | Yes      | The API's Entra ID Application ID URI or client ID, e.g. `api://<client-id>`.         |
-| `chatUrl`        | No       | Deep link used by the "Open chat" action until an in-product chat surface exists.     |
-| `actions`        | No       | Overrides the menu list. Defaults to the three actions above.                         |
-| `theme`          | No       | `gradientFrom` / `gradientVia` / `gradientTo` / `accent` hex values.                  |
+| Property         | Required | Description                                                                         |
+| ---------------- | -------- | ----------------------------------------------------------------------------------- |
+| `apiBaseUrl`     | Yes      | Origin of the site assistant API, e.g. `https://localhost:3000`. No trailing slash. |
+| `apiResourceUri` | Yes      | The API's Entra ID Application ID URI or client ID, e.g. `api://<client-id>`.       |
+| `chatUrl`        | No       | Deep link used by the "Open chat" action until an in-product chat surface exists.   |
+| `actions`        | No       | Overrides the menu list. Defaults to the three actions above.                       |
+| `theme`          | No       | `gradientFrom` / `gradientVia` / `gradientTo` / `accent` hex values.                |
 
 If `apiBaseUrl` or `apiResourceUri` is missing, the button still renders and the menu shows
 a configuration message instead of throwing on every page in the tenant.
@@ -61,20 +61,20 @@ a configuration message instead of throwing on every page in the tenant.
 
 `config/serve.json` defines which API the local workbench/debug session talks to:
 
-| Configuration           | `apiBaseUrl`                                                                         | Command                 |
-| ----------------------- | ------------------------------------------------------------------------------------ | ----------------------- |
-| `default` / `spoAssistant` | `http://localhost:3000` — API running locally                                       | `pnpm start`            |
-| `spoAssistantContainer` | `https://container-app-spo-assistants.agreeablesand-e9283835.swedencentral.azurecontainerapps.io` — deployed Azure Container App | `pnpm start:container`  |
+| Configuration              | `apiBaseUrl`                                                                                                                     | Command                |
+| -------------------------- | -------------------------------------------------------------------------------------------------------------------------------- | ---------------------- |
+| `default` / `spoAssistant` | `http://localhost:3000` — API running locally                                                                                    | `pnpm start`           |
+| `spoAssistantContainer`    | `https://container-app-spo-assistants.agreeablesand-e9283835.swedencentral.azurecontainerapps.io` — deployed Azure Container App | `pnpm start:container` |
 
 `pnpm start:container` is just `heft start --clean --serve-config spoAssistantContainer`.
 The container app's CORS must allow the debug origin (`https://<tenant>.sharepoint.com`)
 the same way the local API does.
 
-Placeholders to replace before deploying:
+The deployed origin is not in the package at all — `scripts/deploy.ps1` writes `apiBaseUrl`
+into the custom action per site, so a site can be repointed without a rebuild.
 
-- `sharepoint/assets/elements.xml` — `REPLACE-WITH-API-HOST`, the origin the deployed API
-  is reachable at. `config/serve.json` already points at `https://localhost:3000` for local
-  debugging, and both files now carry the real `apiResourceUri`.
+Placeholder to replace before deploying:
+
 - `config/package-solution.json` — `REPLACE-WITH-API-APP-REGISTRATION-DISPLAY-NAME` under
   `webApiPermissionRequests`. This must match the **display name** of the API's app
   registration, and the scope must be one the registration exposes.
@@ -96,7 +96,7 @@ Placeholders to replace before deploying:
 | --------------- | ----------------------------------------------------------------------------- |
 | `get.ps1`       | Lists the delegated scopes already granted to SPFx on the API. Microsoft.Graph. |
 | `set.ps1`       | Grants a scope (default `user_impersonation`) — the scripted equivalent of approving the request in SharePoint admin center > Advanced > API access. |
-| `script.ps1`    | `-Action Deploy \| Install \| Update \| Remove \| Status` for the app catalog package and the per-site custom action. PnP.PowerShell. |
+| `deploy.ps1`    | `-Action Deploy \| Remove \| Status` — the whole per-site lifecycle. PnP.PowerShell. |
 
 The API's client ID, the tenant ID, and the solution/component IDs are hardcoded as
 parameter defaults at the top of each script — override them on the command line when
@@ -107,13 +107,69 @@ targeting something else. Local `pnpm start` runs are unaffected; those read
 cd scripts
 ./set.ps1                                                    # grant user_impersonation
 ./get.ps1                                                    # verify
-./script.ps1 -Action Deploy -PnPClientId <id> -TenantAdminUrl https://contoso-admin.sharepoint.com
-./script.ps1 -Action Install -PnPClientId <id> -SiteUrl https://contoso.sharepoint.com/sites/hr
-./script.ps1 -Action Update -PnPClientId <id> -SiteUrl <site> -ApiBaseUrl https://api.contoso.com
+./deploy.ps1 -Interactive -ClientId <pnp-client-id> -SiteUrl https://contoso.sharepoint.com/sites/home
+./deploy.ps1 -Interactive -ClientId <pnp-client-id> -SiteUrl <site1>,<site2> -ApiBaseUrl https://api.contoso.com
+./deploy.ps1 -Action Status -Interactive -ClientId <pnp-client-id> -SiteUrl <site>
+./deploy.ps1 -Action Remove -Interactive -ClientId <pnp-client-id> -SiteUrl <site> [-RemoveAppCatalog]
 ```
 
-`-PnPClientId` is required — an app registration for PnP PowerShell's interactive sign-in,
-separate from the API's.
+`-ClientId` is an app registration for PnP PowerShell, separate from the API's.
+
+#### What Deploy does per site
+
+The package ships **code only** — no `elements.xml`, no `<CustomAction>` feature. Every
+provisioning step is a PnP cmdlet, and each one is idempotent, so re-running `Deploy` is
+how you ship a new build or change the API host:
+
+1. creates the **site collection app catalog** if the site has none (via the admin center,
+   derived from the site URL unless `-TenantAdminUrl` is given);
+2. `Add-PnPApp -Scope Site -Overwrite -Publish` uploads the `.sppkg` there;
+3. `Install-PnPApp` on first run, `Update-PnPApp` when a newer version is in the catalog;
+4. `Add-PnPCustomAction` with the `ClientSideComponentProperties` for that site — rewritten
+   only when the properties actually changed.
+
+`Remove` reverses it: custom action, `Uninstall-PnPApp`, `Remove-PnPApp`, and the app
+catalog itself only with `-RemoveAppCatalog`. A failing site does not stop the batch; the
+script exits non-zero and names the sites that failed.
+
+For unattended use, swap `-Interactive` for an Entra app-only certificate:
+
+```powershell
+./deploy.ps1 -ClientId <app-id> -Tenant contoso.onmicrosoft.com `
+    -CertificatePath ./pnp.pfx -CertificatePassword <password> `
+    -SiteUrl https://contoso.sharepoint.com/sites/home
+```
+
+### CI/CD
+
+| Workflow              | Trigger             | What it does                                                        |
+| --------------------- | ------------------- | ------------------------------------------------------------------- |
+| `build-package.yml`   | push / PR to main   | Builds, releases the `.sppkg`, then deploys it (push only).         |
+| `deploy.yml`          | manual dispatch     | Any action against any sites, using a published release's `.sppkg`. |
+| `deploy-reusable.yml` | called by the above | Installs PnP.PowerShell and runs `scripts/deploy.ps1`.              |
+
+Both entry points call the same script, so CI does nothing you cannot reproduce locally.
+
+Repository **variables**:
+
+| Variable           | Purpose                                                                                                                          |
+| ------------------ | -------------------------------------------------------------------------------------------------------------------------------- |
+| `SPO_DEPLOY_SITES` | Comma-separated sites that get every push to main, e.g. `https://contoso.sharepoint.com/sites/home`. Unset disables auto-deploy. |
+| `SPO_API_BASE_URL` | Optional `apiBaseUrl` override. Empty uses the script default.                                                                   |
+
+Repository **secrets** (app-only auth — ACS client secrets are retired, so a certificate is
+the only supported unattended path):
+
+| Secret                     | Purpose                                          |
+| -------------------------- | ------------------------------------------------ |
+| `SPO_CLIENT_ID`            | Entra app registration used by PnP.PowerShell.   |
+| `SPO_TENANT`               | e.g. `contoso.onmicrosoft.com`.                  |
+| `SPO_CERTIFICATE_BASE64`   | `base64 -i pnp.pfx` of that registration's cert. |
+| `SPO_CERTIFICATE_PASSWORD` | Optional, if the PFX is password-protected.      |
+
+The registration needs the application permissions `SharePoint > Sites.FullControl.All`
+(custom action + app install) and `SharePoint > Sites.Manage.All`-or-tenant-admin rights to
+create site collection app catalogs, granted with tenant admin consent.
 
 ### API contract
 

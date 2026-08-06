@@ -60,16 +60,22 @@ Four IDs must stay in sync when any of them changes:
 
 | Value | Source of truth | Also appears in |
 | --- | --- | --- |
-| Solution / product ID | `config/package-solution.json` | `scripts/script.ps1` `$AppId` |
-| Component ID | `SpoAssistantApplicationCustomizer.manifest.json` | `config/serve.json`, `sharepoint/assets/*.xml`, `scripts/script.ps1` `$ComponentId` |
-| Custom action title | `sharepoint/assets/elements.xml` | `scripts/script.ps1` `$CustomActionTitle` |
-| API client ID | the API's Entra app registration | `config/serve.json`, `sharepoint/assets/elements.xml`, `scripts/{get,set,script}.ps1` |
+| Solution / product ID | `config/package-solution.json` | `scripts/deploy.ps1` `$AppId` |
+| Component ID | `SpoAssistantApplicationCustomizer.manifest.json` | `config/serve.json`, `scripts/deploy.ps1` `$ComponentId` |
+| API client ID | the API's Entra app registration | `config/serve.json`, `scripts/{get,set,deploy}.ps1` |
 
-`config/serve.json` configures `pnpm start` only. `sharepoint/assets/elements.xml`
-configures the deployed package. **Editing one does not affect the other, and neither
-affects sites already provisioned** — a deployed `.sppkg` carries its own copy of the
-properties, so a stale package keeps serving stale values until it is rebuilt and
-redeployed. Diagnose against the artifact (`unzip -p *.sppkg`), not the working tree.
+The `.sppkg` carries **no** provisioning XML — there is no `elements.xml` and no
+`<CustomAction>`, and `skipFeatureDeployment` is `false` so the app must be installed on a
+site explicitly. `scripts/deploy.ps1` owns the entire lifecycle per site (site collection
+app catalog, `Add-PnPApp`, `Install-PnPApp`/`Update-PnPApp`, `Add-PnPCustomAction`) and is
+what CI invokes; don't reintroduce feature-framework assets, and don't put deployment logic
+in a workflow that the script could own.
+
+`config/serve.json` configures `pnpm start` only. The custom action written by
+`deploy.ps1` configures deployed sites. **Editing one does not affect the other, and
+neither affects sites already provisioned** — re-run `deploy.ps1` against a site to change
+its properties. Diagnose the shipped code against the artifact (`unzip -p *.sppkg`), not
+the working tree.
 
 ## Style
 

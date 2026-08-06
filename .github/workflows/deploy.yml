@@ -1,0 +1,43 @@
+name: Deploy to sites
+
+# Manual counterpart to the automatic deployment in build-package.yml: run any lifecycle
+# action against arbitrary sites, using a .sppkg from a published release.
+
+on:
+  workflow_dispatch:
+    inputs:
+      sites:
+        description: 'Site URLs, comma separated (e.g. https://contoso.sharepoint.com/sites/home).'
+        required: true
+        type: string
+      action:
+        description: 'Lifecycle action'
+        required: true
+        default: Deploy
+        type: choice
+        options: [Deploy, Remove, Status]
+      release_tag:
+        description: 'Release tag to deploy. Leave empty for the latest release.'
+        required: false
+        type: string
+      api_base_url:
+        description: 'API origin override, no trailing slash. Empty uses the script default.'
+        required: false
+        type: string
+      remove_app_catalog:
+        description: 'Remove action only: also remove the site collection app catalog.'
+        required: false
+        default: false
+        type: boolean
+
+jobs:
+  deploy:
+    uses: ./.github/workflows/deploy-reusable.yml
+    with:
+      sites: ${{ inputs.sites }}
+      action: ${{ inputs.action }}
+      package_source: release
+      release_tag: ${{ inputs.release_tag }}
+      api_base_url: ${{ inputs.api_base_url }}
+      remove_app_catalog: ${{ inputs.remove_app_catalog }}
+    secrets: inherit

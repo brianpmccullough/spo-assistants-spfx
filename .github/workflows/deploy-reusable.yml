@@ -1,0 +1,126 @@
+name: Deploy (reusable)
+
+# Thin wrapper around scripts/deploy.ps1 — every deployment decision lives in that script
+# so the same lifecycle runs identically from a workstation and from CI.
+
+on:
+  workflow_call:
+    inputs:
+      sites:
+        description: 'Site URLs, comma or newline separated.'
+        required: true
+        type: string
+      action:
+        description: 'Deploy, Remove, or Status.'
+        required: false
+        default: Deploy
+        type: string
+      package_source:
+        description: "'artifact' (same run) or 'release' (download a published .sppkg)."
+        required: false
+        default: artifact
+        type: string
+      release_tag:
+        description: "Release tag to pull the .sppkg from when package_source is 'release'. Empty means latest."
+        required: false
+        default: ''
+        type: string
+      api_base_url:
+        description: 'Overrides the ApiBaseUrl default in scripts/deploy.ps1.'
+        required: false
+        default: ''
+        type: string
+      api_resource_uri:
+        description: 'Overrides the ApiResourceUri default in scripts/deploy.ps1.'
+        required: false
+        default: ''
+        type: string
+      remove_app_catalog:
+        description: 'Remove action only: also remove the site collection app catalog.'
+        required: false
+        default: false
+        type: boolean
+      pnp_version:
+        description: 'PnP.PowerShell version to install.'
+        required: false
+        default: '3.1.0'
+        type: string
+    secrets:
+      SPO_CLIENT_ID:
+        required: true
+      SPO_TENANT:
+        required: true
+      SPO_CERTIFICATE_BASE64:
+        required: true
+      SPO_CERTIFICATE_PASSWORD:
+        required: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Download .sppkg from this run
+        if: inputs.package_source == 'artifact'
+        uses: actions/download-artifact@v6
+        with:
+          name: spo-assistants-spfx.sppkg
+          path: sharepoint/solution
+
+      - name: Download .sppkg from a release
+        if: inputs.package_source == 'release'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.release_tag }}
+        run: |
+          mkdir -p sharepoint/solution
+          gh release download $TAG --pattern '*.sppkg' --dir sharepoint/solution --clobber
+
+      - name: Cache PnP.PowerShell
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/share/powershell/Modules
+          key: pnp-powershell-${{ inputs.pnp_version }}
+
+      - name: Install PnP.PowerShell
+        shell: pwsh
+        run: |
+          if (-not (Get-Module -ListAvailable -Name PnP.PowerShell | Where-Object Version -eq '${{ inputs.pnp_version }}')) {
+            Install-Module PnP.PowerShell -RequiredVersion '${{ inputs.pnp_version }}' -Scope CurrentUser -Force -AllowClobber
+          }
+
+      - name: ${{ inputs.action }}
+        shell: pwsh
+        env:
+          SPO_CLIENT_ID: ${{ secrets.SPO_CLIENT_ID }}
+          SPO_TENANT: ${{ secrets.SPO_TENANT }}
+          SPO_CERTIFICATE_BASE64: ${{ secrets.SPO_CERTIFICATE_BASE64 }}
+          SPO_CERTIFICATE_PASSWORD: ${{ secrets.SPO_CERTIFICATE_PASSWORD }}
+          SITES: ${{ inputs.sites }}
+          API_BASE_URL: ${{ inputs.api_base_url }}
+          API_RESOURCE_URI: ${{ inputs.api_resource_uri }}
+        run: |
+          $sites = $env:SITES -split '[,\r\n]' | ForEach-Object { $_.Trim() } | Where-Object { $_ }
+          if (-not $sites) { throw 'No site URLs supplied.' }
+
+          $params = @{
+            Action                   = '${{ inputs.action }}'
+            SiteUrl                  = $sites
+            ClientId                 = $env:SPO_CLIENT_ID
+            Tenant                   = $env:SPO_TENANT
+            CertificateBase64Encoded = $env:SPO_CERTIFICATE_BASE64
+          }
+
+          # Only pass overrides that were actually supplied; otherwise the script's own
+          # defaults apply.
+          if ($env:SPO_CERTIFICATE_PASSWORD) { $params.CertificatePassword = $env:SPO_CERTIFICATE_PASSWORD }
+          if ($env:API_BASE_URL) { $params.ApiBaseUrl = $env:API_BASE_URL }
+          if ($env:API_RESOURCE_URI) { $params.ApiResourceUri = $env:API_RESOURCE_URI }
+          if ('${{ inputs.remove_app_catalog }}' -eq 'true') { $params.RemoveAppCatalog = $true }
+
+          ./scripts/deploy.ps1 @params
